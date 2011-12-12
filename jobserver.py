@@ -116,7 +116,6 @@ class Minder:
         """
             init windows
         """
-        wFile = '/home/liuhui/code/python/windows.glade'
         self.w = gtk.glade.XML(wFile)
         self.clist = self.w.get_widget('JobList')
         self.windows = self.w.get_widget('Notice')
