@@ -3,7 +3,7 @@
 
 #
 # Have bug:
-# when someone ping me, the programe will crackt
+# when someone ping me, the programe will crash
 #
 
 from socket import *
