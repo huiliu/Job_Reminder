@@ -7,14 +7,14 @@
 #
 
 from socket import *
-import threading
+from multiprocessing import Process, Pipe
 import gtk.glade
 import gtk
 import time
 import pynotify
 import sys
 
-def Server(disList, port=8888):
+def Server(disList, pipe, port=8888):
     """
         Startup Server and list the port
     """
@@ -28,37 +28,33 @@ def Server(disList, port=8888):
     s.listen(maxClient)
 
     while True:
+        #if pipe.recv() == 'quit':
+        #    s.close()
+        #    break
+
+        data = ''
+        timestr = ''
         client, addr = s.accept()
-        msg = ''
-        if addr[0] == '127.0.0.1':
-            msg = client.recv(maxData).decode(code)
-            LocalCmd(msg)
-            continue
-        elif AckAddr(addr):
+
+        # Check Client IP
+        if AckAddr(addr):
             msg = client.recv(maxData)
+            client.close()
+            timestr = time.ctime()
+            data = eval(msg.decode(code))
         else:
-            notice = "The %s want to connect me." % str(addr[0])
-            NotifyUnknowHost(notice)
+            client.close()
             continue
-        client.close()
 
-        timestr = time.ctime()
-        data = eval(msg.decode(code))
-
+        # Check Client Data
         if AckData(data):
             disList = AckJob(data, timestr, disList)
         else:
             continue
 
-        # Display disList on windows
-        #t = threading.Thread(target=w.Display, args=((disList,)))
-        #t.daemon = True
-        #t.start
-        w = Minder(disList)
-        w.Display(disList)
-        #print disList
+        pipe.send("recived message")
 
-def LocalCmd(cmd):
+def LocalCmd(cmd, p):
     """
         Excute the command come from localhost.
     """
@@ -108,59 +104,32 @@ def AckJob(revmsg, timestr, disList):
 
     return disList
 
-class Minder:
-    """
-        Add time stamp and index to the job list
-    """
-    def __init__(self, data, wFile='windows.glade'):
-        """
-            init windows
-        """
-        self.w = gtk.glade.XML(wFile)
-        self.clist = self.w.get_widget('JobList')
-        self.windows = self.w.get_widget('Notice')
-        self.windows.connect('destroy', gtk.main_quit)
-        #self.Display(data)
-
-    def Display(self, data):
-        """
-            Display Data in the list
-        """
-        i = 1
-        #print type(self.clist)
-        for item in data:
-            #tmp = [str(i)] + item
-            #self.clist.append(tmp)
-            self.clist.append(item)
-            i += 1
-        # Display the window
-        gtk.main()
-        # print "display data!"
-
-def AckAddr(addr):
-    """
-        Check the ip of client.
+def AckAddr(client, process=None):
+    """ Check the ip of client.
     """
     #
     # TODO: Write a code wchich use to translate ip/netmask to ip list
     #
-    WhiteList = [
-                    '59.77.33.200',
-                    '59.77.33.122',
-                    '59.77.33.142',
-                    '127.0.0.1'
-                ]
+    WhiteList = ['59.77.33.200', '59.77.33.122', '59.77.33.142', '127.0.0.1']
     BlackList = []
+
+    ip = client[1][0]
+    if ip == '127.0.0.1':
+        msg = client.recv(maxData).decode(code)
+        LocalCmd(msg, process)
+        return False
+
     # Default reject all request besides the client's ip in WhiteList
     try:
-        WhiteList.index(addr[0])
+        WhiteList.index(ip)
         return True
     except ValueError:
+        notice = "The %s want to connect me." % ip
+        NotifyUnknowHost(notice)
         return False
 
 def AckData(revdata):
-    """
-        Check the recive Data that is correct
+    """ Check the recive Data that is correct
         [jobname, status, where]
     """
     ListLength = 3
@@ -172,10 +141,55 @@ def AckData(revdata):
         return True 
     return False
 
+def Reminder(data, wFile='windows.glade'):
+    """
+        Add time stamp and index to the job list
+    """
+    #
+    # init windows
+    #
+    w = gtk.glade.XML(wFile)
+    windows = w.get_widget('Notice')
+    clist = w.get_widget('JobList')
+    windows.connect('destroy', gtk.Window.hide)
+    #self.windows.set_visible(False)
+
+    #
+    # Display Data in the list
+    #
+    # Append the data to the gtkCList
+    for item in data:
+        clist.append(item)
+
+    # Display the window
+    gtk.main()
+
 def main():
     # [jobname, status, where, time]
     clist = []
-    Server(clist)
-
+    pWindows = None
+    sendPipe, recvPipe = Pipe()
+    pSocket = Process(target=Server, args=(clist, sendPipe))
+    pSocket.start()
+    print recvPipe.recv()
+    print 'recived'
+    pSocket.join()
+    while True:
+        try:
+            msg = recvPipe.recv()
+            if not pWindows:
+                pWindows = Process(target=Reminder, args=(disList,))
+                pWindows.start()
+                pWindows.join()
+            else:
+                pWindows.terminate()
+                pWindows = Process(target=Reminder, args=(disList,))
+                pWindows.start()
+                pWindows.join()
+            print msg
+            #Reminder(clist)
+        except:
+            pass
+            
 if __name__ == '__main__':
     main()
