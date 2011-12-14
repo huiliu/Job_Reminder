@@ -1,10 +1,6 @@
 #!/usr/bin/python2
 # -*- code: utf-8 -*-
 
-#
-# Have bug:
-# when someone ping me, the programe will crash
-#
 
 from socket import *
 import threading
