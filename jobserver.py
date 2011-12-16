@@ -13,8 +13,9 @@ import gtk
 import time
 import pynotify
 import sys
+import os
 
-def Server(disList, pipe, port=8888):
+def Server(disList, port=8888):
     """
         Startup Server and list the port
     """
@@ -23,9 +24,8 @@ def Server(disList, pipe, port=8888):
     code = 'utf-8'
 
     # Create Socket list port
-    s = socket(AF_INET, SOCK_STREAM)
+    s = socket(AF_INET, SOCK_DGRAM)
     s.bind(('', port))
-    s.listen(maxClient)
 
     while True:
         #if pipe.recv() == 'quit':
@@ -34,25 +34,27 @@ def Server(disList, pipe, port=8888):
 
         data = ''
         timestr = ''
-        client, addr = s.accept()
+        msg, addr = s.recvfrom(maxData)
 
         # Check Client IP
         if AckAddr(addr):
-            msg = client.recv(maxData)
-            client.close()
             timestr = time.ctime()
             data = eval(msg.decode(code))
         else:
-            client.close()
             continue
 
         # Check Client Data
         if AckData(data):
+            print "AckJob"
             disList = AckJob(data, timestr, disList)
+            #Reminder(data)
+            print "new process..."
+            p = Process(target = Reminder, args = (['test'],))
+            p.start()
+            #p.join()
         else:
             continue
 
-        pipe.send("recived message")
 
 def LocalCmd(cmd, p):
     """
@@ -113,11 +115,12 @@ def AckAddr(client, process=None):
     WhiteList = ['59.77.33.200', '59.77.33.122', '59.77.33.142', '127.0.0.1']
     BlackList = []
 
-    ip = client[1][0]
+    print client
+    ip = client[0]
     if ip == '127.0.0.1':
-        msg = client.recv(maxData).decode(code)
-        LocalCmd(msg, process)
-        return False
+        #msg = client.recv(maxData).decode(code)
+        #LocalCmd(msg, process)
+        return True
 
     # Default reject all request besides the client's ip in WhiteList
     try:
@@ -148,10 +151,17 @@ def Reminder(data, wFile='windows.glade'):
     #
     # init windows
     #
+    print os.getppid()
+    print os.getpid()
+
+    print data
+    time.sleep(4)
+    print "return"
+    return
     w = gtk.glade.XML(wFile)
     windows = w.get_widget('Notice')
     clist = w.get_widget('JobList')
-    windows.connect('destroy', gtk.Window.hide)
+    windows.connect('destroy', gtk.main_quit)
     #self.windows.set_visible(False)
 
     #
@@ -166,30 +176,10 @@ def Reminder(data, wFile='windows.glade'):
 
 def main():
     # [jobname, status, where, time]
-    clist = []
-    pWindows = None
-    sendPipe, recvPipe = Pipe()
-    pSocket = Process(target=Server, args=(clist, sendPipe))
-    pSocket.start()
-    print recvPipe.recv()
-    print 'recived'
-    pSocket.join()
-    while True:
-        try:
-            msg = recvPipe.recv()
-            if not pWindows:
-                pWindows = Process(target=Reminder, args=(disList,))
-                pWindows.start()
-                pWindows.join()
-            else:
-                pWindows.terminate()
-                pWindows = Process(target=Reminder, args=(disList,))
-                pWindows.start()
-                pWindows.join()
-            print msg
-            #Reminder(clist)
-        except:
-            pass
+    pass
             
 if __name__ == '__main__':
+    #Reminder(['test'])
+    Server([])
+    sys.exit(0)
     main()
